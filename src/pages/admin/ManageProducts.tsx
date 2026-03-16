@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { useAppContext } from '../../context/AppContext';
 import { useCurrency } from '../../context/CurrencyContext';
 import { Product } from '../../types';
-import { Plus, Edit2, Trash2, Save, X, Image as ImageIcon, Link as LinkIcon } from 'lucide-react';
+import { Plus, Edit2, Trash2, Save, X, Image as ImageIcon, Link as LinkIcon, Sparkles } from 'lucide-react';
+import { suggestProductDetails } from '../../services/gemini';
 
 export const ManageProducts: React.FC = () => {
   const { products, addProduct, updateProduct, deleteProduct } = useAppContext();
@@ -11,6 +12,48 @@ export const ManageProducts: React.FC = () => {
   const [isAdding, setIsAdding] = useState(false);
   const [formData, setFormData] = useState<Partial<Product>>({});
   const [productToDelete, setProductToDelete] = useState<string | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+
+  const handleAiSuggest = async () => {
+    if (!formData.imageUrl) {
+      setAiError('Please upload or paste an image URL first.');
+      return;
+    }
+
+    setIsGenerating(true);
+    setAiError(null);
+    try {
+      let imageData = formData.imageUrl;
+      let mimeType = 'image/jpeg';
+
+      // If it's a data URL, extract the base64 part
+      if (imageData.startsWith('data:')) {
+        const parts = imageData.split(',');
+        mimeType = parts[0].split(':')[1].split(';')[0];
+        imageData = parts[1];
+      } else {
+        // If it's a remote URL, we might need to fetch it or just tell the user it needs to be an upload
+        // For now, let's assume it's a data URL from upload for best results
+        // If it's a remote URL, we can't easily get base64 in frontend due to CORS
+        if (!imageData.startsWith('data:')) {
+          throw new Error("AI suggestion works best with uploaded images. Please upload a file instead of using a link.");
+        }
+      }
+
+      const suggestion = await suggestProductDetails(imageData, mimeType);
+      setFormData(prev => ({
+        ...prev,
+        title: suggestion.title,
+        description: suggestion.description,
+        category: suggestion.category
+      }));
+    } catch (err: any) {
+      setAiError(err.message || 'Failed to generate suggestions');
+    } finally {
+      setIsGenerating(false);
+    }
+  };
 
   const handleEdit = (product: Product) => {
     setIsEditing(product.id);
@@ -132,6 +175,24 @@ export const ManageProducts: React.FC = () => {
               placeholder="Or paste an image URL here..."
             />
           </div>
+          {formData.imageUrl && (
+            <div className="mt-4">
+              <button
+                type="button"
+                onClick={handleAiSuggest}
+                disabled={isGenerating}
+                className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-emerald-50 text-emerald-700 rounded-xl border border-emerald-200 hover:bg-emerald-100 transition-colors font-medium disabled:opacity-50"
+              >
+                {isGenerating ? (
+                  <div className="h-5 w-5 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <Sparkles className="h-5 w-5" />
+                )}
+                {isGenerating ? 'Analyzing Image...' : '✨ AI Suggest Title & Description'}
+              </button>
+              {aiError && <p className="mt-2 text-xs text-red-500 text-center">{aiError}</p>}
+            </div>
+          )}
         </div>
         <div className="md:col-span-2">
           <label className="block text-sm font-medium text-stone-700 mb-2">Affiliate Link</label>

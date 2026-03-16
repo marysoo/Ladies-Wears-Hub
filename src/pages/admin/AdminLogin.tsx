@@ -26,6 +26,18 @@ export const AdminLogin: React.FC = () => {
     }
   };
 
+  const { loginWithRedirect } = useAppContext();
+  const handleRedirectLogin = async () => {
+    setIsLoading(true);
+    setError('');
+    try {
+      await loginWithRedirect();
+    } catch (err: any) {
+      setError(err.message || 'Failed to start redirect login');
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-[70vh] flex items-center justify-center px-4 sm:px-6 lg:px-8 bg-stone-50">
       <div className="max-w-md w-full space-y-8 bg-white p-10 rounded-3xl shadow-xl border border-stone-100">
@@ -41,14 +53,14 @@ export const AdminLogin: React.FC = () => {
           </p>
         </div>
         
-        <div className="mt-8 space-y-6">
+        <div className="mt-8 space-y-4">
           {error && (
             <div className="text-red-500 text-sm text-center bg-red-50 p-3 rounded-xl">
               {error}
             </div>
           )}
 
-          <div>
+          <div className="space-y-3">
             <button
               onClick={handleLogin}
               disabled={isLoading}
@@ -63,7 +75,19 @@ export const AdminLogin: React.FC = () => {
               </span>
               Sign in with Google
             </button>
+
+            <button
+              onClick={handleRedirectLogin}
+              disabled={isLoading}
+              className="w-full flex justify-center py-3 px-4 border border-stone-200 text-sm font-medium rounded-2xl text-stone-600 bg-white hover:bg-stone-50 focus:outline-none transition-colors disabled:opacity-70"
+            >
+              Trouble logging in? Try Redirect
+            </button>
           </div>
+          
+          <p className="text-center text-xs text-stone-400">
+            Redirect login is recommended for mobile browsers.
+          </p>
         </div>
       </div>
     </div>

@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Product, Coupon, SiteSettings } from '../types';
 import { db, auth, googleProvider } from '../firebase';
-import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
+import { signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged } from 'firebase/auth';
 import { collection, doc, onSnapshot, addDoc, updateDoc, deleteDoc, setDoc } from 'firebase/firestore';
 
 interface AppContextType {
@@ -17,6 +17,7 @@ interface AppContextType {
   isAdmin: boolean;
   isAuthReady: boolean;
   login: () => Promise<boolean>;
+  loginWithRedirect: () => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -87,9 +88,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isAuthReady, setIsAuthReady] = useState(false);
 
   useEffect(() => {
+    // Check for redirect result on mount
+    getRedirectResult(auth).then((result) => {
+      if (result) {
+        const adminEmails = ['tersooaker@gmail.com'];
+        if (result.user.email && adminEmails.includes(result.user.email) && result.user.emailVerified) {
+          setIsAdmin(true);
+        }
+      }
+    }).catch((error) => {
+      console.error("Redirect login failed", error);
+    });
+
     const unsubscribe = onAuthStateChanged(auth, (user) => {
-      // Check if logged in user is the admin
-      if (user && user.email === 'tersooaker@gmail.com' && user.emailVerified) {
+      // Authorized admin emails
+      const adminEmails = ['tersooaker@gmail.com'];
+      
+      if (user && adminEmails.includes(user.email || '') && user.emailVerified) {
         setIsAdmin(true);
       } else {
         setIsAdmin(false);
@@ -182,15 +197,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const login = async () => {
     try {
       const result = await signInWithPopup(auth, googleProvider);
-      if (result.user.email === 'tersooaker@gmail.com' && result.user.emailVerified) {
+      const adminEmails = ['tersooaker@gmail.com'];
+      
+      if (result.user.email && adminEmails.includes(result.user.email) && result.user.emailVerified) {
         setIsAdmin(true);
         return true;
       } else {
         await signOut(auth);
         return false;
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Login failed", error);
+      // If popup is blocked, we might want to suggest redirect
+      if (error.code === 'auth/popup-blocked') {
+        throw new Error("Popup blocked. Please enable popups or try the 'Login with Redirect' option.");
+      }
+      throw error;
+    }
+  };
+
+  const loginWithRedirect = async () => {
+    try {
+      await signInWithRedirect(auth, googleProvider);
+    } catch (error) {
+      console.error("Redirect login failed", error);
       throw error;
     }
   };
@@ -206,7 +236,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addProduct, updateProduct, deleteProduct,
       addCoupon, deleteCoupon,
       updateSettings,
-      isAdmin, isAuthReady, login, logout
+      isAdmin, isAuthReady, login, loginWithRedirect, logout
     }}>
       {children}
     </AppContext.Provider>
