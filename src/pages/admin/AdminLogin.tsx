@@ -4,17 +4,25 @@ import { useAppContext } from '../../context/AppContext';
 import { Lock, LogIn } from 'lucide-react';
 
 export const AdminLogin: React.FC = () => {
-  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const { login } = useAppContext();
   const navigate = useNavigate();
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (login(password)) {
-      navigate('/admin/dashboard');
-    } else {
-      setError('Invalid password. Try "admin123"');
+  const handleLogin = async () => {
+    setIsLoading(true);
+    setError('');
+    try {
+      const success = await login();
+      if (success) {
+        navigate('/admin/dashboard');
+      } else {
+        setError('Unauthorized account. Only the admin can log in.');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to log in');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -32,26 +40,8 @@ export const AdminLogin: React.FC = () => {
             Secure area for managing affiliate links and content.
           </p>
         </div>
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-          <div className="rounded-md shadow-sm -space-y-px">
-            <div>
-              <label htmlFor="password" className="sr-only">
-                Password
-              </label>
-              <input
-                id="password"
-                name="password"
-                type="password"
-                autoComplete="current-password"
-                required
-                className="appearance-none rounded-2xl relative block w-full px-4 py-4 border border-stone-300 placeholder-stone-500 text-stone-900 focus:outline-none focus:ring-emerald-500 focus:border-emerald-500 focus:z-10 sm:text-sm"
-                placeholder="Admin Password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-            </div>
-          </div>
-
+        
+        <div className="mt-8 space-y-6">
           {error && (
             <div className="text-red-500 text-sm text-center bg-red-50 p-3 rounded-xl">
               {error}
@@ -60,16 +50,21 @@ export const AdminLogin: React.FC = () => {
 
           <div>
             <button
-              type="submit"
-              className="group relative w-full flex justify-center py-4 px-4 border border-transparent text-sm font-medium rounded-2xl text-white bg-emerald-600 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 transition-colors"
+              onClick={handleLogin}
+              disabled={isLoading}
+              className="group relative w-full flex justify-center py-4 px-4 border border-transparent text-sm font-medium rounded-2xl text-white bg-emerald-600 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 transition-colors disabled:opacity-70"
             >
               <span className="absolute left-0 inset-y-0 flex items-center pl-3">
-                <LogIn className="h-5 w-5 text-emerald-500 group-hover:text-emerald-400" aria-hidden="true" />
+                {isLoading ? (
+                  <div className="h-5 w-5 border-2 border-emerald-300 border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <LogIn className="h-5 w-5 text-emerald-500 group-hover:text-emerald-400" aria-hidden="true" />
+                )}
               </span>
-              Sign in
+              Sign in with Google
             </button>
           </div>
-        </form>
+        </div>
       </div>
     </div>
   );

@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { useAppContext } from '../../context/AppContext';
+import { useCurrency } from '../../context/CurrencyContext';
 import { Product } from '../../types';
 import { Plus, Edit2, Trash2, Save, X, Image as ImageIcon, Link as LinkIcon } from 'lucide-react';
 
 export const ManageProducts: React.FC = () => {
   const { products, addProduct, updateProduct, deleteProduct } = useAppContext();
+  const { formatPrice, isLoading: isCurrencyLoading } = useCurrency();
   const [isEditing, setIsEditing] = useState<string | null>(null);
   const [isAdding, setIsAdding] = useState(false);
   const [formData, setFormData] = useState<Partial<Product>>({});
@@ -224,7 +226,9 @@ export const ManageProducts: React.FC = () => {
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-stone-500">
-                    {product.price || '-'}
+                    {product.price ? (
+                      isCurrencyLoading ? '...' : formatPrice(product.price)
+                    ) : '-'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <div className="flex justify-end gap-3">

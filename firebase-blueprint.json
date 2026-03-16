@@ -1,0 +1,55 @@
+{
+  "entities": {
+    "Product": {
+      "title": "Product",
+      "description": "An affiliate product listing",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "category": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "affiliateLink": { "type": "string" },
+        "price": { "type": "string" }
+      },
+      "required": ["title", "description", "category", "imageUrl", "affiliateLink"]
+    },
+    "Coupon": {
+      "title": "Coupon",
+      "description": "A discount code or deal",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "code": { "type": "string" },
+        "link": { "type": "string" },
+        "description": { "type": "string" }
+      },
+      "required": ["title", "code", "link", "description"]
+    },
+    "SiteSettings": {
+      "title": "SiteSettings",
+      "description": "Global settings for the site",
+      "type": "object",
+      "properties": {
+        "aboutText": { "type": "string" },
+        "contactWhatsApp": { "type": "string" },
+        "privacyText": { "type": "string" }
+      },
+      "required": ["aboutText", "contactWhatsApp", "privacyText"]
+    }
+  },
+  "firestore": {
+    "/products/{productId}": {
+      "schema": { "$ref": "#/entities/Product" },
+      "description": "Collection of affiliate products"
+    },
+    "/coupons/{couponId}": {
+      "schema": { "$ref": "#/entities/Coupon" },
+      "description": "Collection of discount codes and deals"
+    },
+    "/settings/{settingId}": {
+      "schema": { "$ref": "#/entities/SiteSettings" },
+      "description": "Global site settings (e.g., settingId = 'site')"
+    }
+  }
+}

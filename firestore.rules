@@ -1,0 +1,143 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: products
+    // Document ID: auto-generated
+    // Fields:
+    //   - title: string (required)
+    //   - description: string (required)
+    //   - category: string (required)
+    //   - imageUrl: string (required)
+    //   - affiliateLink: string (required)
+    //   - price: string (optional)
+    //
+    // Collection: coupons
+    // Document ID: auto-generated
+    // Fields:
+    //   - title: string (required)
+    //   - code: string (required)
+    //   - link: string (required)
+    //   - description: string (required)
+    //
+    // Collection: settings
+    // Document ID: 'site'
+    // Fields:
+    //   - aboutText: string (required)
+    //   - contactWhatsApp: string (required)
+    //   - privacyText: string (required)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && 
+        (request.auth.token.email == "tersooaker@gmail.com" && request.auth.token.email_verified == true);
+    }
+
+    function hasOnlyAllowedFields(allowedFields) {
+      return request.resource.data.keys().hasOnly(allowedFields);
+    }
+
+    function hasRequiredFields(requiredFields) {
+      return request.resource.data.keys().hasAll(requiredFields);
+    }
+
+    function isValidString(field, minLen, maxLen) {
+      return request.resource.data[field] is string && 
+             request.resource.data[field].size() >= minLen && 
+             request.resource.data[field].size() <= maxLen;
+    }
+
+    function isValidOptionalString(field, minLen, maxLen) {
+      return !(field in request.resource.data) || 
+             (request.resource.data[field] is string && 
+              request.resource.data[field].size() >= minLen && 
+              request.resource.data[field].size() <= maxLen);
+    }
+
+    function isValidUrl(urlField) {
+      return request.resource.data[urlField] is string && 
+             (request.resource.data[urlField].matches("^https://.*") || request.resource.data[urlField].matches("^http://.*")) &&
+             request.resource.data[urlField].size() <= 1000;
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidProduct() {
+      let allowedFields = ['title', 'description', 'category', 'imageUrl', 'affiliateLink', 'price'];
+      let requiredFields = ['title', 'description', 'category', 'imageUrl', 'affiliateLink'];
+      
+      return hasOnlyAllowedFields(allowedFields) &&
+             hasRequiredFields(requiredFields) &&
+             isValidString('title', 1, 200) &&
+             isValidString('description', 1, 2000) &&
+             isValidString('category', 1, 100) &&
+             isValidUrl('imageUrl') &&
+             isValidUrl('affiliateLink') &&
+             isValidOptionalString('price', 1, 50);
+    }
+
+    function isValidCoupon() {
+      let allowedFields = ['title', 'code', 'link', 'description'];
+      let requiredFields = ['title', 'code', 'link', 'description'];
+      
+      return hasOnlyAllowedFields(allowedFields) &&
+             hasRequiredFields(requiredFields) &&
+             isValidString('title', 1, 200) &&
+             isValidString('code', 1, 50) &&
+             isValidUrl('link') &&
+             isValidString('description', 1, 1000);
+    }
+
+    function isValidSiteSettings() {
+      let allowedFields = ['aboutText', 'contactWhatsApp', 'privacyText'];
+      let requiredFields = ['aboutText', 'contactWhatsApp', 'privacyText'];
+      
+      return hasOnlyAllowedFields(allowedFields) &&
+             hasRequiredFields(requiredFields) &&
+             isValidString('aboutText', 0, 5000) &&
+             isValidString('contactWhatsApp', 0, 50) &&
+             isValidString('privacyText', 0, 5000);
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /products/{productId} {
+      allow read: if true; // Publicly readable
+      allow create: if isAdmin() && isValidProduct();
+      allow update: if isAdmin() && isValidProduct();
+      allow delete: if isAdmin();
+    }
+
+    match /coupons/{couponId} {
+      allow read: if true; // Publicly readable
+      allow create: if isAdmin() && isValidCoupon();
+      allow update: if isAdmin() && isValidCoupon();
+      allow delete: if isAdmin();
+    }
+
+    match /settings/{settingId} {
+      allow read: if true; // Publicly readable
+      allow create: if isAdmin() && isValidSiteSettings();
+      allow update: if isAdmin() && isValidSiteSettings();
+      allow delete: if isAdmin();
+    }
+  }
+}

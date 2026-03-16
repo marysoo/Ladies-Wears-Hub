@@ -1,60 +1,24 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Product, Coupon, SiteSettings } from '../types';
+import { db, auth, googleProvider } from '../firebase';
+import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
+import { collection, doc, onSnapshot, addDoc, updateDoc, deleteDoc, setDoc } from 'firebase/firestore';
 
 interface AppContextType {
   products: Product[];
   coupons: Coupon[];
   settings: SiteSettings;
-  addProduct: (product: Omit<Product, 'id'>) => void;
-  updateProduct: (id: string, product: Partial<Product>) => void;
-  deleteProduct: (id: string) => void;
-  addCoupon: (coupon: Omit<Coupon, 'id'>) => void;
-  deleteCoupon: (id: string) => void;
-  updateSettings: (settings: Partial<SiteSettings>) => void;
+  addProduct: (product: Omit<Product, 'id'>) => Promise<void>;
+  updateProduct: (id: string, product: Partial<Product>) => Promise<void>;
+  deleteProduct: (id: string) => Promise<void>;
+  addCoupon: (coupon: Omit<Coupon, 'id'>) => Promise<void>;
+  deleteCoupon: (id: string) => Promise<void>;
+  updateSettings: (settings: Partial<SiteSettings>) => Promise<void>;
   isAdmin: boolean;
-  login: (password: string) => boolean;
-  logout: () => void;
+  isAuthReady: boolean;
+  login: () => Promise<boolean>;
+  logout: () => Promise<void>;
 }
-
-const defaultProducts: Product[] = [
-  {
-    id: '1',
-    title: 'Classic Navy Blazer',
-    description: 'A tailored navy blazer perfect for any professional setting. Features a structured fit and premium fabric.',
-    category: 'Blazers',
-    imageUrl: 'https://images.unsplash.com/photo-1548624313-0396c75e4b1a?auto=format&fit=crop&q=80&w=800',
-    affiliateLink: 'https://example.com/affiliate/blazer-1',
-    price: '$89.99'
-  },
-  {
-    id: '2',
-    title: 'Elegant Pencil Skirt',
-    description: 'High-waisted pencil skirt in charcoal grey. Comfortable stretch material ideal for long office hours.',
-    category: 'Office Outfit',
-    imageUrl: 'https://images.unsplash.com/photo-1582533561751-07168481d31c?auto=format&fit=crop&q=80&w=800',
-    affiliateLink: 'https://example.com/affiliate/skirt-1',
-    price: '$45.00'
-  },
-  {
-    id: '3',
-    title: 'Silk Blouse',
-    description: 'Breathable silk blouse in ivory. A staple for every professional wardrobe.',
-    category: 'Office Dress',
-    imageUrl: 'https://images.unsplash.com/photo-1598554747436-c9293d6a588f?auto=format&fit=crop&q=80&w=800',
-    affiliateLink: 'https://example.com/affiliate/blouse-1',
-    price: '$65.00'
-  }
-];
-
-const defaultCoupons: Coupon[] = [
-  {
-    id: '1',
-    title: 'Summer Office Sale',
-    code: 'OFFICE20',
-    link: 'https://example.com/sale',
-    description: 'Get 20% off all blazers and skirts this summer.'
-  }
-];
 
 const defaultSettings: SiteSettings = {
   aboutText: 'Welcome to Office Wear Affiliate Hub. We curate the best professional attire for women, helping you look your best in the workplace.',
@@ -64,70 +28,175 @@ const defaultSettings: SiteSettings = {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
+enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId?: string;
+    email?: string | null;
+    emailVerified?: boolean;
+    isAnonymous?: boolean;
+    tenantId?: string | null;
+    providerInfo: {
+      providerId: string;
+      displayName: string | null;
+      email: string | null;
+      photoUrl: string | null;
+    }[];
+  }
+}
+
+function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: auth.currentUser?.uid,
+      email: auth.currentUser?.email,
+      emailVerified: auth.currentUser?.emailVerified,
+      isAnonymous: auth.currentUser?.isAnonymous,
+      tenantId: auth.currentUser?.tenantId,
+      providerInfo: auth.currentUser?.providerData.map(provider => ({
+        providerId: provider.providerId,
+        displayName: provider.displayName,
+        email: provider.email,
+        photoUrl: provider.photoURL
+      })) || []
+    },
+    operationType,
+    path
+  };
+  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  throw new Error(JSON.stringify(errInfo));
+}
+
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [products, setProducts] = useState<Product[]>(() => {
-    const saved = localStorage.getItem('products');
-    return saved ? JSON.parse(saved) : defaultProducts;
-  });
-
-  const [coupons, setCoupons] = useState<Coupon[]>(() => {
-    const saved = localStorage.getItem('coupons');
-    return saved ? JSON.parse(saved) : defaultCoupons;
-  });
-
-  const [settings, setSettings] = useState<SiteSettings>(() => {
-    const saved = localStorage.getItem('settings');
-    return saved ? JSON.parse(saved) : defaultSettings;
-  });
-
+  const [products, setProducts] = useState<Product[]>([]);
+  const [coupons, setCoupons] = useState<Coupon[]>([]);
+  const [settings, setSettings] = useState<SiteSettings>(defaultSettings);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isAuthReady, setIsAuthReady] = useState(false);
 
   useEffect(() => {
-    localStorage.setItem('products', JSON.stringify(products));
-  }, [products]);
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      // Check if logged in user is the admin
+      if (user && user.email === 'tersooaker@gmail.com' && user.emailVerified) {
+        setIsAdmin(true);
+      } else {
+        setIsAdmin(false);
+      }
+      setIsAuthReady(true);
+    });
+    return () => unsubscribe();
+  }, []);
 
   useEffect(() => {
-    localStorage.setItem('coupons', JSON.stringify(coupons));
-  }, [coupons]);
+    if (!isAuthReady) return;
 
-  useEffect(() => {
-    localStorage.setItem('settings', JSON.stringify(settings));
-  }, [settings]);
+    const unsubProducts = onSnapshot(collection(db, 'products'), (snapshot) => {
+      const prods: Product[] = [];
+      snapshot.forEach((doc) => {
+        prods.push({ id: doc.id, ...doc.data() } as Product);
+      });
+      setProducts(prods);
+    }, (error) => handleFirestoreError(error, OperationType.LIST, 'products'));
 
-  const addProduct = (product: Omit<Product, 'id'>) => {
-    setProducts([...products, { ...product, id: Date.now().toString() }]);
-  };
+    const unsubCoupons = onSnapshot(collection(db, 'coupons'), (snapshot) => {
+      const coups: Coupon[] = [];
+      snapshot.forEach((doc) => {
+        coups.push({ id: doc.id, ...doc.data() } as Coupon);
+      });
+      setCoupons(coups);
+    }, (error) => handleFirestoreError(error, OperationType.LIST, 'coupons'));
 
-  const updateProduct = (id: string, updatedProduct: Partial<Product>) => {
-    setProducts(products.map(p => p.id === id ? { ...p, ...updatedProduct } : p));
-  };
+    const unsubSettings = onSnapshot(doc(db, 'settings', 'site'), (docSnap) => {
+      if (docSnap.exists()) {
+        setSettings(docSnap.data() as SiteSettings);
+      }
+    }, (error) => handleFirestoreError(error, OperationType.GET, 'settings/site'));
 
-  const deleteProduct = (id: string) => {
-    setProducts(products.filter(p => p.id !== id));
-  };
+    return () => {
+      unsubProducts();
+      unsubCoupons();
+      unsubSettings();
+    };
+  }, [isAuthReady]);
 
-  const addCoupon = (coupon: Omit<Coupon, 'id'>) => {
-    setCoupons([...coupons, { ...coupon, id: Date.now().toString() }]);
-  };
-
-  const deleteCoupon = (id: string) => {
-    setCoupons(coupons.filter(c => c.id !== id));
-  };
-
-  const updateSettings = (newSettings: Partial<SiteSettings>) => {
-    setSettings({ ...settings, ...newSettings });
-  };
-
-  const login = (password: string) => {
-    // Simple mock authentication for demo
-    if (password === 'admin123') {
-      setIsAdmin(true);
-      return true;
+  const addProduct = async (product: Omit<Product, 'id'>) => {
+    try {
+      await addDoc(collection(db, 'products'), product);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, 'products');
     }
-    return false;
   };
 
-  const logout = () => {
+  const updateProduct = async (id: string, updatedProduct: Partial<Product>) => {
+    try {
+      await updateDoc(doc(db, 'products', id), updatedProduct);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `products/${id}`);
+    }
+  };
+
+  const deleteProduct = async (id: string) => {
+    try {
+      await deleteDoc(doc(db, 'products', id));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `products/${id}`);
+    }
+  };
+
+  const addCoupon = async (coupon: Omit<Coupon, 'id'>) => {
+    try {
+      await addDoc(collection(db, 'coupons'), coupon);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, 'coupons');
+    }
+  };
+
+  const deleteCoupon = async (id: string) => {
+    try {
+      await deleteDoc(doc(db, 'coupons', id));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `coupons/${id}`);
+    }
+  };
+
+  const updateSettings = async (newSettings: Partial<SiteSettings>) => {
+    try {
+      await setDoc(doc(db, 'settings', 'site'), { ...settings, ...newSettings }, { merge: true });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, 'settings/site');
+    }
+  };
+
+  const login = async () => {
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      if (result.user.email === 'tersooaker@gmail.com' && result.user.emailVerified) {
+        setIsAdmin(true);
+        return true;
+      } else {
+        await signOut(auth);
+        return false;
+      }
+    } catch (error) {
+      console.error("Login failed", error);
+      throw error;
+    }
+  };
+
+  const logout = async () => {
+    await signOut(auth);
     setIsAdmin(false);
   };
 
@@ -137,7 +206,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addProduct, updateProduct, deleteProduct,
       addCoupon, deleteCoupon,
       updateSettings,
-      isAdmin, login, logout
+      isAdmin, isAuthReady, login, logout
     }}>
       {children}
     </AppContext.Provider>

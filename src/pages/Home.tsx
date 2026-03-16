@@ -1,10 +1,12 @@
 import React, { useState, useMemo } from 'react';
 import { Search, Tag, ShoppingBag, ArrowRight } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
+import { useCurrency } from '../context/CurrencyContext';
 import { Product } from '../types';
 
 export const Home: React.FC = () => {
   const { products, coupons } = useAppContext();
+  const { formatPrice, isLoading: isCurrencyLoading } = useCurrency();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
 
@@ -141,7 +143,13 @@ export const Home: React.FC = () => {
                   <div className="flex justify-between items-start mb-2">
                     <h3 className="text-lg font-bold text-stone-900 leading-tight">{product.title}</h3>
                     {product.price && (
-                      <span className="font-semibold text-emerald-700">{product.price}</span>
+                      <span className="font-semibold text-emerald-700">
+                        {isCurrencyLoading ? (
+                          <span className="animate-pulse bg-emerald-100 rounded h-5 w-16 inline-block"></span>
+                        ) : (
+                          formatPrice(product.price)
+                        )}
+                      </span>
                     )}
                   </div>
                   <p className="text-sm text-stone-600 mb-6 line-clamp-2 flex-grow">{product.description}</p>
