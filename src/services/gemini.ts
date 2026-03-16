@@ -1,30 +1,26 @@
 import { GoogleGenAI, Type } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-export interface ProductSuggestion {
-  title: string;
-  description: string;
-  category: string;
-}
+export const suggestProductDetails = async (base64Image: string, mimeType: string) => {
+  const model = "gemini-3-flash-preview";
+  
+  const prompt = `Analyze this office wear clothing image and provide:
+  1. A catchy, SEO-optimized product title (max 60 chars).
+  2. A professional, engaging product description (2-3 sentences) highlighting style and occasion.
+  3. The most appropriate category (e.g., Blazers, Dresses, Skirts, Suits, Tops, Trousers).
+  
+  Return the result in JSON format.`;
 
-export async function suggestProductDetails(imageData: string, mimeType: string): Promise<ProductSuggestion> {
-  const model = ai.models.generateContent({
-    model: "gemini-3-flash-preview",
+  const response = await ai.models.generateContent({
+    model,
     contents: [
       {
         parts: [
-          {
-            inlineData: {
-              data: imageData,
-              mimeType: mimeType,
-            },
-          },
-          {
-            text: "Analyze this image of a professional office wear item. Provide a catchy, SEO-optimized title, a persuasive description highlighting its benefits for a professional woman, and a suitable category (e.g., Dresses, Blazers, Shoes, Accessories). Return the result in JSON format.",
-          },
-        ],
-      },
+          { inlineData: { data: base64Image, mimeType } },
+          { text: prompt }
+        ]
+      }
     ],
     config: {
       responseMimeType: "application/json",
@@ -33,16 +29,12 @@ export async function suggestProductDetails(imageData: string, mimeType: string)
         properties: {
           title: { type: Type.STRING },
           description: { type: Type.STRING },
-          category: { type: Type.STRING },
+          category: { type: Type.STRING }
         },
-        required: ["title", "description", "category"],
-      },
-    },
+        required: ["title", "description", "category"]
+      }
+    }
   });
 
-  const response = await model;
-  const text = response.text;
-  if (!text) throw new Error("No response from AI");
-  
-  return JSON.parse(text) as ProductSuggestion;
-}
+  return JSON.parse(response.text);
+};

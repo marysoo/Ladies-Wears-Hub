@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useAppContext } from '../../context/AppContext';
 import { useCurrency } from '../../context/CurrencyContext';
 import { Product } from '../../types';
-import { Plus, Edit2, Trash2, Save, X, Image as ImageIcon, Link as LinkIcon, Sparkles } from 'lucide-react';
+import { Plus, Edit2, Trash2, Save, X, Image as ImageIcon, Link as LinkIcon, Sparkles, ChevronLeft, ChevronRight } from 'lucide-react';
 import { suggestProductDetails } from '../../services/gemini';
 
 export const ManageProducts: React.FC = () => {
@@ -10,21 +10,22 @@ export const ManageProducts: React.FC = () => {
   const { formatPrice, isLoading: isCurrencyLoading } = useCurrency();
   const [isEditing, setIsEditing] = useState<string | null>(null);
   const [isAdding, setIsAdding] = useState(false);
-  const [formData, setFormData] = useState<Partial<Product>>({});
+  const [formData, setFormData] = useState<Partial<Product>>({ imageUrls: [] });
   const [productToDelete, setProductToDelete] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
 
   const handleAiSuggest = async () => {
-    if (!formData.imageUrl) {
-      setAiError('Please upload or paste an image URL first.');
+    const images = formData.imageUrls || [];
+    if (images.length === 0) {
+      setAiError('Please upload or paste at least one image URL first.');
       return;
     }
 
     setIsGenerating(true);
     setAiError(null);
     try {
-      let imageData = formData.imageUrl;
+      let imageData = images[0];
       let mimeType = 'image/jpeg';
 
       // If it's a data URL, extract the base64 part
@@ -33,9 +34,6 @@ export const ManageProducts: React.FC = () => {
         mimeType = parts[0].split(':')[1].split(';')[0];
         imageData = parts[1];
       } else {
-        // If it's a remote URL, we might need to fetch it or just tell the user it needs to be an upload
-        // For now, let's assume it's a data URL from upload for best results
-        // If it's a remote URL, we can't easily get base64 in frontend due to CORS
         if (!imageData.startsWith('data:')) {
           throw new Error("AI suggestion works best with uploaded images. Please upload a file instead of using a link.");
         }
@@ -57,18 +55,41 @@ export const ManageProducts: React.FC = () => {
 
   const handleEdit = (product: Product) => {
     setIsEditing(product.id);
-    setFormData(product);
+    setFormData({
+      ...product,
+      imageUrls: product.imageUrls || []
+    });
   };
 
   const handleSave = () => {
+    const finalData = {
+      ...formData,
+      imageUrls: formData.imageUrls || []
+    };
+
     if (isEditing) {
-      updateProduct(isEditing, formData);
+      updateProduct(isEditing, finalData);
       setIsEditing(null);
     } else {
-      addProduct(formData as Omit<Product, 'id'>);
+      addProduct(finalData as Omit<Product, 'id'>);
       setIsAdding(false);
     }
-    setFormData({});
+    setFormData({ imageUrls: [] });
+  };
+
+  const addImageUrl = (url: string) => {
+    if (!url) return;
+    setFormData(prev => ({
+      ...prev,
+      imageUrls: [...(prev.imageUrls || []), url]
+    }));
+  };
+
+  const removeImageUrl = (index: number) => {
+    setFormData(prev => ({
+      ...prev,
+      imageUrls: (prev.imageUrls || []).filter((_, i) => i !== index)
+    }));
   };
 
   const confirmDelete = () => {
@@ -115,68 +136,77 @@ export const ManageProducts: React.FC = () => {
           />
         </div>
         <div className="md:col-span-2">
-          <label className="block text-sm font-medium text-stone-700 mb-2">Product Image</label>
-          <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-stone-300 border-dashed rounded-xl hover:border-emerald-500 transition-colors bg-stone-50">
-            <div className="space-y-1 text-center w-full">
-              {formData.imageUrl ? (
-                <div className="relative inline-block">
-                  <img src={formData.imageUrl} alt="Preview" className="mx-auto h-48 object-cover rounded-lg shadow-sm" />
-                  <button
-                    type="button"
-                    onClick={() => setFormData({ ...formData, imageUrl: '' })}
-                    className="absolute -top-3 -right-3 bg-red-100 text-red-600 rounded-full p-1.5 hover:bg-red-200 shadow-sm transition-colors"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-              ) : (
-                <div className="py-4">
-                  <ImageIcon className="mx-auto h-12 w-12 text-stone-400 mb-3" />
-                  <div className="flex text-sm text-stone-600 justify-center items-center gap-1">
-                    <label
-                      htmlFor="file-upload"
-                      className="relative cursor-pointer bg-white rounded-md font-medium text-emerald-600 hover:text-emerald-700 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-emerald-500 px-3 py-1 border border-emerald-200 shadow-sm transition-colors"
-                    >
-                      <span>Upload a file</span>
-                      <input
-                        id="file-upload"
-                        name="file-upload"
-                        type="file"
-                        className="sr-only"
-                        accept="image/*"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) {
-                            const reader = new FileReader();
-                            reader.onloadend = () => {
-                              setFormData({ ...formData, imageUrl: reader.result as string });
-                            };
-                            reader.readAsDataURL(file);
-                          }
-                        }}
-                      />
-                    </label>
-                    <p className="pl-1">or drag and drop</p>
-                  </div>
-                  <p className="text-xs text-stone-500 mt-2">PNG, JPG, GIF up to 5MB</p>
-                </div>
-              )}
+          <label className="block text-sm font-medium text-stone-700 mb-2">Product Images (Slideshow)</label>
+          
+          {/* Image Preview Grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 mb-4">
+            {(formData.imageUrls || []).map((url, index) => (
+              <div key={index} className="relative group aspect-square rounded-xl overflow-hidden border border-stone-200">
+                <img src={url} alt={`Preview ${index}`} className="w-full h-full object-cover" />
+                <button
+                  type="button"
+                  onClick={() => removeImageUrl(index)}
+                  className="absolute top-2 right-2 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            ))}
+            <label className="cursor-pointer aspect-square rounded-xl border-2 border-dashed border-stone-300 flex flex-col items-center justify-center hover:border-emerald-500 hover:bg-stone-50 transition-all">
+              <Plus className="h-6 w-6 text-stone-400" />
+              <span className="text-xs text-stone-500 mt-1">Add Image</span>
+              <input
+                type="file"
+                className="sr-only"
+                accept="image/*"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    const reader = new FileReader();
+                    reader.onloadend = () => {
+                      addImageUrl(reader.result as string);
+                    };
+                    reader.readAsDataURL(file);
+                  }
+                }}
+              />
+            </label>
+          </div>
+
+          <div className="flex gap-2">
+            <div className="flex-1 flex relative">
+              <span className="inline-flex items-center px-3 rounded-l-xl border border-r-0 border-stone-300 bg-stone-50 text-stone-500">
+                <LinkIcon className="h-4 w-4" />
+              </span>
+              <input
+                type="text"
+                id="url-input"
+                className="flex-1 p-3 border border-stone-300 rounded-r-xl focus:ring-emerald-500 focus:border-emerald-500 text-sm"
+                placeholder="Or paste an image URL here..."
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    addImageUrl((e.target as HTMLInputElement).value);
+                    (e.target as HTMLInputElement).value = '';
+                  }
+                }}
+              />
             </div>
+            <button
+              type="button"
+              onClick={() => {
+                const input = document.getElementById('url-input') as HTMLInputElement;
+                addImageUrl(input.value);
+                input.value = '';
+              }}
+              className="px-4 py-2 bg-stone-100 text-stone-700 rounded-xl hover:bg-stone-200 font-medium transition-colors"
+            >
+              Add URL
+            </button>
           </div>
-          <div className="mt-3 flex relative">
-            <span className="inline-flex items-center px-3 rounded-l-xl border border-r-0 border-stone-300 bg-stone-50 text-stone-500">
-              <LinkIcon className="h-4 w-4" />
-            </span>
-            <input
-              type="text"
-              className="flex-1 p-3 border border-stone-300 rounded-r-xl focus:ring-emerald-500 focus:border-emerald-500 text-sm"
-              value={formData.imageUrl || ''}
-              onChange={(e) => setFormData({ ...formData, imageUrl: e.target.value })}
-              placeholder="Or paste an image URL here..."
-            />
-          </div>
-          {formData.imageUrl && (
-            <div className="mt-4">
+
+          {(formData.imageUrls || []).length > 0 && (
+            <div className="mt-6">
               <button
                 type="button"
                 onClick={handleAiSuggest}
@@ -223,7 +253,7 @@ export const ManageProducts: React.FC = () => {
       </div>
       <div className="mt-6 flex justify-end gap-3">
         <button
-          onClick={() => { setIsEditing(null); setIsAdding(false); setFormData({}); }}
+          onClick={() => { setIsEditing(null); setIsAdding(false); setFormData({ imageUrls: [] }); }}
           className="px-6 py-3 border border-stone-300 rounded-xl text-stone-700 hover:bg-stone-50 font-medium transition-colors"
         >
           Cancel
@@ -245,7 +275,7 @@ export const ManageProducts: React.FC = () => {
         <h2 className="text-2xl font-bold text-stone-900">Manage Products</h2>
         {!isAdding && !isEditing && (
           <button
-            onClick={() => { setIsAdding(true); setFormData({}); }}
+            onClick={() => { setIsAdding(true); setFormData({ imageUrls: [] }); }}
             className="bg-stone-900 hover:bg-emerald-600 text-white px-5 py-2.5 rounded-xl font-medium flex items-center gap-2 transition-colors"
           >
             <Plus className="h-5 w-5" />
@@ -272,8 +302,13 @@ export const ManageProducts: React.FC = () => {
                 <tr key={product.id} className="hover:bg-stone-50 transition-colors">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
-                      <div className="h-12 w-12 flex-shrink-0">
-                        <img className="h-12 w-12 rounded-lg object-cover" src={product.imageUrl} alt="" />
+                      <div className="h-12 w-12 flex-shrink-0 bg-stone-100 rounded-lg overflow-hidden relative">
+                        <img className="h-12 w-12 object-cover" src={product.imageUrls?.[0]} alt="" />
+                        {product.imageUrls?.length > 1 && (
+                          <div className="absolute bottom-0 right-0 bg-stone-900/70 text-white text-[8px] px-1 rounded-tl">
+                            {product.imageUrls.length}
+                          </div>
+                        )}
                       </div>
                       <div className="ml-4">
                         <div className="text-sm font-medium text-stone-900">{product.title}</div>

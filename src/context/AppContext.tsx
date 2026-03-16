@@ -120,7 +120,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const unsubProducts = onSnapshot(collection(db, 'products'), (snapshot) => {
       const prods: Product[] = [];
       snapshot.forEach((doc) => {
-        prods.push({ id: doc.id, ...doc.data() } as Product);
+        const data = doc.data();
+        prods.push({ 
+          id: doc.id, 
+          ...data,
+          imageUrls: data.imageUrls || (data.imageUrl ? [data.imageUrl] : [])
+        } as Product);
       });
       setProducts(prods);
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'products'));

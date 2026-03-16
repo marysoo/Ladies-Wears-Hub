@@ -124,48 +124,97 @@ export const Home: React.FC = () => {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
             {filteredProducts.map(product => (
-              <div key={product.id} className="group bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 border border-stone-100 flex flex-col">
-                <div className="aspect-[4/5] overflow-hidden bg-stone-100 relative">
-                  <img
-                    src={product.imageUrl}
-                    alt={product.title}
-                    className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
-                    loading="lazy"
-                    referrerPolicy="no-referrer"
-                  />
-                  <div className="absolute top-3 left-3">
-                    <span className="bg-white/90 backdrop-blur-sm px-3 py-1 rounded-full text-xs font-semibold text-stone-800 shadow-sm">
-                      {product.category}
-                    </span>
-                  </div>
-                </div>
-                <div className="p-5 flex flex-col flex-grow">
-                  <div className="flex justify-between items-start mb-2">
-                    <h3 className="text-lg font-bold text-stone-900 leading-tight">{product.title}</h3>
-                    {product.price && (
-                      <span className="font-semibold text-emerald-700">
-                        {isCurrencyLoading ? (
-                          <span className="animate-pulse bg-emerald-100 rounded h-5 w-16 inline-block"></span>
-                        ) : (
-                          formatPrice(product.price)
-                        )}
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-sm text-stone-600 mb-6 line-clamp-2 flex-grow">{product.description}</p>
-                  
-                  {/* Affiliate link hidden behind button */}
-                  <button
-                    onClick={() => handleBuyClick(product.affiliateLink)}
-                    className="w-full bg-stone-900 hover:bg-emerald-600 text-white font-medium py-3 px-4 rounded-xl transition-colors flex items-center justify-center gap-2 mt-auto"
-                  >
-                    View Details <ArrowRight className="h-4 w-4" />
-                  </button>
-                </div>
-              </div>
+              <ProductCard key={product.id} product={product} />
             ))}
           </div>
         )}
+      </div>
+    </div>
+  );
+};
+
+const ProductCard: React.FC<{ product: Product }> = ({ product }) => {
+  const { formatPrice, isLoading: isCurrencyLoading } = useCurrency();
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const images = product.imageUrls || [];
+
+  const handleBuyClick = (link: string) => {
+    window.open(link, '_blank', 'noopener,noreferrer');
+  };
+
+  return (
+    <div className="group bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 border border-stone-100 flex flex-col">
+      <div className="aspect-[4/5] overflow-hidden bg-stone-100 relative">
+        <img
+          src={images[currentImageIndex]}
+          alt={product.title}
+          className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
+          loading="lazy"
+          referrerPolicy="no-referrer"
+        />
+        
+        {/* Slideshow Controls */}
+        {images.length > 1 && (
+          <>
+            <div className="absolute inset-0 flex items-center justify-between p-2 opacity-0 group-hover:opacity-100 transition-opacity">
+              <button 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setCurrentImageIndex((prev) => (prev === 0 ? images.length - 1 : prev - 1));
+                }}
+                className="bg-white/80 backdrop-blur-sm p-1.5 rounded-full shadow-sm hover:bg-white text-stone-800"
+              >
+                <ArrowRight className="h-4 w-4 rotate-180" />
+              </button>
+              <button 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setCurrentImageIndex((prev) => (prev === images.length - 1 ? 0 : prev + 1));
+                }}
+                className="bg-white/80 backdrop-blur-sm p-1.5 rounded-full shadow-sm hover:bg-white text-stone-800"
+              >
+                <ArrowRight className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
+              {images.map((_, idx) => (
+                <div 
+                  key={idx} 
+                  className={`h-1.5 rounded-full transition-all ${idx === currentImageIndex ? 'w-4 bg-emerald-500' : 'w-1.5 bg-white/60'}`}
+                />
+              ))}
+            </div>
+          </>
+        )}
+
+        <div className="absolute top-3 left-3">
+          <span className="bg-white/90 backdrop-blur-sm px-3 py-1 rounded-full text-xs font-semibold text-stone-800 shadow-sm">
+            {product.category}
+          </span>
+        </div>
+      </div>
+      <div className="p-5 flex flex-col flex-grow">
+        <div className="flex justify-between items-start mb-2">
+          <h3 className="text-lg font-bold text-stone-900 leading-tight">{product.title}</h3>
+          {product.price && (
+            <span className="font-semibold text-emerald-700">
+              {isCurrencyLoading ? (
+                <span className="animate-pulse bg-emerald-100 rounded h-5 w-16 inline-block"></span>
+              ) : (
+                formatPrice(product.price)
+              )}
+            </span>
+          )}
+        </div>
+        <p className="text-sm text-stone-600 mb-6 line-clamp-2 flex-grow">{product.description}</p>
+        
+        {/* Affiliate link hidden behind button */}
+        <button
+          onClick={() => handleBuyClick(product.affiliateLink)}
+          className="w-full bg-stone-900 hover:bg-emerald-600 text-white font-medium py-3 px-4 rounded-xl transition-colors flex items-center justify-center gap-2 mt-auto"
+        >
+          View Details <ArrowRight className="h-4 w-4" />
+        </button>
       </div>
     </div>
   );

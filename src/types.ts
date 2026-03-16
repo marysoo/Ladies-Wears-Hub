@@ -3,7 +3,7 @@ export interface Product {
   title: string;
   description: string;
   category: string;
-  imageUrl: string;
+  imageUrls: string[]; // Changed from imageUrl to support slideshows
   affiliateLink: string;
   price?: string;
 }
