@@ -44,7 +44,7 @@ service cloud.firestore {
 
     function isAdmin() {
       return isAuthenticated() && 
-        (request.auth.token.email == "tersooaker@gmail.com" && request.auth.token.email_verified == true);
+        (request.auth.token.email.lower() == "tersooaker@gmail.com");
     }
 
     function hasOnlyAllowedFields(allowedFields) {
@@ -64,14 +64,30 @@ service cloud.firestore {
     function isValidOptionalString(field, minLen, maxLen) {
       return !(field in request.resource.data) || 
              (request.resource.data[field] is string && 
-              request.resource.data[field].size() >= minLen && 
+              request.resource.data[field].size() >= 0 && 
               request.resource.data[field].size() <= maxLen);
     }
 
     function isValidUrl(urlField) {
       return request.resource.data[urlField] is string && 
              (request.resource.data[urlField].matches("^https://.*") || request.resource.data[urlField].matches("^http://.*")) &&
-             request.resource.data[urlField].size() <= 1000;
+             request.resource.data[urlField].size() <= 2000;
+    }
+
+    function isValidImageSource(source) {
+      return source is string && 
+             (source.matches("^https://.*") || 
+              source.matches("^http://.*") || 
+              source.size() > 100) && // Assume it's a data URL if it's long and not http
+             source.size() <= 800000; // Max 800KB per image string
+    }
+
+    function isValidImageList(field) {
+      return !(field in request.resource.data) || (
+        request.resource.data[field] is list &&
+        request.resource.data[field].size() <= 6 && // Max 6 images
+        request.resource.data[field].all(img, isValidImageSource(img))
+      );
     }
 
     // ===============================================================
@@ -79,17 +95,20 @@ service cloud.firestore {
     // ===============================================================
 
     function isValidProduct() {
-      let allowedFields = ['title', 'description', 'category', 'imageUrl', 'affiliateLink', 'price'];
-      let requiredFields = ['title', 'description', 'category', 'imageUrl', 'affiliateLink'];
+      let allowedFields = ['title', 'description', 'category', 'imageUrl', 'imageUrls', 'affiliateLink', 'price', 'updatedAt', 'createdAt'];
+      let requiredFields = ['title', 'description', 'category', 'affiliateLink'];
       
       return hasOnlyAllowedFields(allowedFields) &&
              hasRequiredFields(requiredFields) &&
-             isValidString('title', 1, 200) &&
-             isValidString('description', 1, 2000) &&
+             isValidString('title', 1, 500) &&
+             isValidString('description', 1, 5000) &&
              isValidString('category', 1, 100) &&
-             isValidUrl('imageUrl') &&
+             isValidOptionalString('imageUrl', 1, 2000) &&
+             isValidImageList('imageUrls') &&
              isValidUrl('affiliateLink') &&
-             isValidOptionalString('price', 1, 50);
+             isValidOptionalString('price', 1, 100) &&
+             isValidOptionalString('updatedAt', 1, 100) &&
+             isValidOptionalString('createdAt', 1, 100);
     }
 
     function isValidCoupon() {
@@ -120,9 +139,8 @@ service cloud.firestore {
     // ===============================================================
 
     match /products/{productId} {
-      allow read: if true; // Publicly readable
-      allow create: if isAdmin() && isValidProduct();
-      allow update: if isAdmin() && isValidProduct();
+      allow read: if true;
+      allow create, update: if isAdmin();
       allow delete: if isAdmin();
     }
 

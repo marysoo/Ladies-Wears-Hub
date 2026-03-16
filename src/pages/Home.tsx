@@ -142,16 +142,26 @@ const ProductCard: React.FC<{ product: Product }> = ({ product }) => {
     window.open(link, '_blank', 'noopener,noreferrer');
   };
 
+  const [imageError, setImageError] = useState(false);
+
   return (
     <div className="group bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 border border-stone-100 flex flex-col">
       <div className="aspect-[4/5] overflow-hidden bg-stone-100 relative">
-        <img
-          src={images[currentImageIndex]}
-          alt={product.title}
-          className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
-          loading="lazy"
-          referrerPolicy="no-referrer"
-        />
+        {images.length > 0 && !imageError ? (
+          <img
+            src={images[currentImageIndex]}
+            alt={product.title}
+            className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
+            loading="lazy"
+            referrerPolicy="no-referrer"
+            onError={() => setImageError(true)}
+          />
+        ) : (
+          <div className="w-full h-full flex flex-col items-center justify-center text-stone-400 gap-2">
+            <ShoppingBag className="h-12 w-12 opacity-20" />
+            <span className="text-xs font-medium opacity-40">No Image Available</span>
+          </div>
+        )}
         
         {/* Slideshow Controls */}
         {images.length > 1 && (

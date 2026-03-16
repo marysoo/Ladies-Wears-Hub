@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 import { useAppContext } from '../../context/AppContext';
 import { useCurrency } from '../../context/CurrencyContext';
 import { Product } from '../../types';
-import { Plus, Edit2, Trash2, Save, X, Image as ImageIcon, Link as LinkIcon, Sparkles, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Edit2, Trash2, Save, X, Image as ImageIcon, Link as LinkIcon, Sparkles, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { suggestProductDetails } from '../../services/gemini';
+import { resizeImage } from '../../utils/imageUtils';
 
 export const ManageProducts: React.FC = () => {
   const { products, addProduct, updateProduct, deleteProduct } = useAppContext();
@@ -13,7 +14,10 @@ export const ManageProducts: React.FC = () => {
   const [formData, setFormData] = useState<Partial<Product>>({ imageUrls: [] });
   const [productToDelete, setProductToDelete] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isResizing, setIsResizing] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const handleAiSuggest = async () => {
     const images = formData.imageUrls || [];
@@ -35,7 +39,7 @@ export const ManageProducts: React.FC = () => {
         imageData = parts[1];
       } else {
         if (!imageData.startsWith('data:')) {
-          throw new Error("AI suggestion works best with uploaded images. Please upload a file instead of using a link.");
+          throw new Error("AI suggestions require an uploaded image file. Please use the 'Add Image' button to upload a photo from your device.");
         }
       }
 
@@ -61,20 +65,68 @@ export const ManageProducts: React.FC = () => {
     });
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
+    if (!formData.title || !formData.description || !formData.category || !formData.affiliateLink) {
+      setSaveError('Please fill in all required fields.');
+      return;
+    }
+
+    if (!formData.imageUrls || formData.imageUrls.length === 0) {
+      setSaveError('Please add at least one image.');
+      return;
+    }
+
+    setIsSaving(true);
+    setSaveError(null);
+
+    const { id, ...dataToSave } = formData;
+    
+    // Clean up empty strings for optional fields
+    const cleanedData: any = { ...dataToSave };
+    if (cleanedData.price === '') delete cleanedData.price;
+    
     const finalData = {
-      ...formData,
-      imageUrls: formData.imageUrls || []
+      ...cleanedData,
+      imageUrl: formData.imageUrls?.[0] || '',
+      imageUrls: formData.imageUrls || [],
+      updatedAt: new Date().toISOString()
     };
 
-    if (isEditing) {
-      updateProduct(isEditing, finalData);
-      setIsEditing(null);
-    } else {
-      addProduct(finalData as Omit<Product, 'id'>);
-      setIsAdding(false);
+    try {
+      if (isEditing) {
+        await updateProduct(isEditing, finalData);
+        setIsEditing(null);
+      } else {
+        await addProduct({ ...finalData, createdAt: new Date().toISOString() } as any);
+        setIsAdding(false);
+      }
+      setFormData({ imageUrls: [] });
+    } catch (err: any) {
+      console.error("Save error:", err);
+      let errorMessage = 'Failed to save product.';
+      
+      // Try to parse Firestore error if it's JSON
+      try {
+        const parsed = JSON.parse(err.message);
+        if (parsed.error.includes('Missing or insufficient permissions')) {
+          const email = parsed.authInfo?.email || 'not logged in';
+          errorMessage = `Permission denied. You are logged in as ${email}. Please make sure this is the admin email (tersooaker@gmail.com).`;
+        } else {
+          errorMessage = `Database error: ${parsed.error}`;
+        }
+      } catch {
+        // Not a JSON error, use raw message or generic size warning
+        if (err.message?.includes('quota')) {
+          errorMessage = 'Storage quota exceeded. Please try again later.';
+        } else {
+          errorMessage = 'Failed to save. This might be because the images are too large (max 1MB total) or there is a connection issue.';
+        }
+      }
+      
+      setSaveError(errorMessage);
+    } finally {
+      setIsSaving(false);
     }
-    setFormData({ imageUrls: [] });
   };
 
   const addImageUrl = (url: string) => {
@@ -141,8 +193,16 @@ export const ManageProducts: React.FC = () => {
           {/* Image Preview Grid */}
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 mb-4">
             {(formData.imageUrls || []).map((url, index) => (
-              <div key={index} className="relative group aspect-square rounded-xl overflow-hidden border border-stone-200">
-                <img src={url} alt={`Preview ${index}`} className="w-full h-full object-cover" />
+              <div key={index} className="relative group aspect-square rounded-xl overflow-hidden border border-stone-200 bg-stone-50">
+                <img 
+                  src={url} 
+                  alt={`Preview ${index}`} 
+                  className="w-full h-full object-cover" 
+                  referrerPolicy="no-referrer"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = 'https://placehold.co/400x500?text=Invalid+URL';
+                  }}
+                />
                 <button
                   type="button"
                   onClick={() => removeImageUrl(index)}
@@ -152,19 +212,33 @@ export const ManageProducts: React.FC = () => {
                 </button>
               </div>
             ))}
-            <label className="cursor-pointer aspect-square rounded-xl border-2 border-dashed border-stone-300 flex flex-col items-center justify-center hover:border-emerald-500 hover:bg-stone-50 transition-all">
-              <Plus className="h-6 w-6 text-stone-400" />
-              <span className="text-xs text-stone-500 mt-1">Add Image</span>
+            <label className={`cursor-pointer aspect-square rounded-xl border-2 border-dashed border-stone-300 flex flex-col items-center justify-center hover:border-emerald-500 hover:bg-stone-50 transition-all ${isResizing ? 'opacity-50 cursor-wait' : ''}`}>
+              {isResizing ? (
+                <Loader2 className="h-6 w-6 text-emerald-500 animate-spin" />
+              ) : (
+                <Plus className="h-6 w-6 text-stone-400" />
+              )}
+              <span className="text-xs text-stone-500 mt-1">{isResizing ? 'Resizing...' : 'Add Image'}</span>
               <input
                 type="file"
                 className="sr-only"
                 accept="image/*"
+                disabled={isResizing}
                 onChange={(e) => {
                   const file = e.target.files?.[0];
                   if (file) {
+                    setIsResizing(true);
                     const reader = new FileReader();
-                    reader.onloadend = () => {
-                      addImageUrl(reader.result as string);
+                    reader.onloadend = async () => {
+                      try {
+                        const resized = await resizeImage(reader.result as string);
+                        addImageUrl(resized);
+                      } catch (err) {
+                        console.error("Resize error:", err);
+                        addImageUrl(reader.result as string); // Fallback to original if resize fails
+                      } finally {
+                        setIsResizing(false);
+                      }
                     };
                     reader.readAsDataURL(file);
                   }
@@ -205,24 +279,25 @@ export const ManageProducts: React.FC = () => {
             </button>
           </div>
 
-          {(formData.imageUrls || []).length > 0 && (
-            <div className="mt-6">
-              <button
-                type="button"
-                onClick={handleAiSuggest}
-                disabled={isGenerating}
-                className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-emerald-50 text-emerald-700 rounded-xl border border-emerald-200 hover:bg-emerald-100 transition-colors font-medium disabled:opacity-50"
-              >
-                {isGenerating ? (
-                  <div className="h-5 w-5 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin" />
-                ) : (
-                  <Sparkles className="h-5 w-5" />
-                )}
-                {isGenerating ? 'Analyzing Image...' : '✨ AI Suggest Title & Description'}
-              </button>
-              {aiError && <p className="mt-2 text-xs text-red-500 text-center">{aiError}</p>}
-            </div>
-          )}
+          <div className="mt-6">
+            <button
+              type="button"
+              onClick={handleAiSuggest}
+              disabled={isGenerating || (formData.imageUrls || []).length === 0}
+              className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-emerald-50 text-emerald-700 rounded-xl border border-emerald-200 hover:bg-emerald-100 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isGenerating ? (
+                <div className="h-5 w-5 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <Sparkles className="h-5 w-5" />
+              )}
+              {isGenerating ? 'Analyzing Image...' : '✨ AI Suggest Title & Description'}
+            </button>
+            {(formData.imageUrls || []).length === 0 && (
+              <p className="mt-2 text-[10px] text-stone-400 text-center">Upload an image first to use AI suggestions</p>
+            )}
+            {aiError && <p className="mt-2 text-xs text-red-500 text-center">{aiError}</p>}
+          </div>
         </div>
         <div className="md:col-span-2">
           <label className="block text-sm font-medium text-stone-700 mb-2">Affiliate Link</label>
@@ -251,19 +326,26 @@ export const ManageProducts: React.FC = () => {
           />
         </div>
       </div>
+      {saveError && <p className="mt-4 text-sm text-red-500 text-center">{saveError}</p>}
       <div className="mt-6 flex justify-end gap-3">
         <button
-          onClick={() => { setIsEditing(null); setIsAdding(false); setFormData({ imageUrls: [] }); }}
+          onClick={() => { setIsEditing(null); setIsAdding(false); setFormData({ imageUrls: [] }); setSaveError(null); }}
           className="px-6 py-3 border border-stone-300 rounded-xl text-stone-700 hover:bg-stone-50 font-medium transition-colors"
+          disabled={isSaving}
         >
           Cancel
         </button>
         <button
           onClick={handleSave}
-          className="px-6 py-3 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 font-medium flex items-center gap-2 transition-colors"
+          disabled={isSaving}
+          className="px-6 py-3 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 font-medium flex items-center gap-2 transition-colors disabled:opacity-50"
         >
-          <Save className="h-4 w-4" />
-          Save Product
+          {isSaving ? (
+            <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+          ) : (
+            <Save className="h-4 w-4" />
+          )}
+          {isSaving ? 'Saving...' : 'Save Product'}
         </button>
       </div>
     </div>
@@ -272,7 +354,13 @@ export const ManageProducts: React.FC = () => {
   return (
     <div>
       <div className="flex justify-between items-center mb-8">
-        <h2 className="text-2xl font-bold text-stone-900">Manage Products</h2>
+        <div>
+          <h2 className="text-2xl font-bold text-stone-900">Manage Products</h2>
+          <p className="text-xs text-stone-500 mt-1 flex items-center gap-1">
+            <Sparkles className="h-3 w-3 text-emerald-500" />
+            Use AI to generate titles and descriptions by uploading images
+          </p>
+        </div>
         {!isAdding && !isEditing && (
           <button
             onClick={() => { setIsAdding(true); setFormData({ imageUrls: [] }); }}
@@ -303,7 +391,15 @@ export const ManageProducts: React.FC = () => {
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
                       <div className="h-12 w-12 flex-shrink-0 bg-stone-100 rounded-lg overflow-hidden relative">
-                        <img className="h-12 w-12 object-cover" src={product.imageUrls?.[0]} alt="" />
+                        <img 
+                          className="h-12 w-12 object-cover" 
+                          src={product.imageUrls?.[0]} 
+                          alt="" 
+                          referrerPolicy="no-referrer"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src = 'https://placehold.co/100x100?text=Error';
+                          }}
+                        />
                         {product.imageUrls?.length > 1 && (
                           <div className="absolute bottom-0 right-0 bg-stone-900/70 text-white text-[8px] px-1 rounded-tl">
                             {product.imageUrls.length}

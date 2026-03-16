@@ -92,7 +92,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     getRedirectResult(auth).then((result) => {
       if (result) {
         const adminEmails = ['tersooaker@gmail.com'];
-        if (result.user.email && adminEmails.includes(result.user.email) && result.user.emailVerified) {
+        if (result.user.email && adminEmails.includes(result.user.email)) {
           setIsAdmin(true);
         }
       }
@@ -104,7 +104,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // Authorized admin emails
       const adminEmails = ['tersooaker@gmail.com'];
       
-      if (user && adminEmails.includes(user.email || '') && user.emailVerified) {
+      if (user && adminEmails.includes(user.email || '')) {
         setIsAdmin(true);
       } else {
         setIsAdmin(false);
@@ -204,7 +204,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const result = await signInWithPopup(auth, googleProvider);
       const adminEmails = ['tersooaker@gmail.com'];
       
-      if (result.user.email && adminEmails.includes(result.user.email) && result.user.emailVerified) {
+      if (result.user.email && adminEmails.includes(result.user.email)) {
         setIsAdmin(true);
         return true;
       } else {

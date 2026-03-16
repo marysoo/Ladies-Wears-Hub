@@ -8,11 +8,16 @@
         "title": { "type": "string" },
         "description": { "type": "string" },
         "category": { "type": "string" },
-        "imageUrl": { "type": "string" },
+        "imageUrl": { "type": "string", "description": "Legacy single image URL" },
+        "imageUrls": { 
+          "type": "array", 
+          "items": { "type": "string" },
+          "description": "List of image URLs or base64 strings for slideshow"
+        },
         "affiliateLink": { "type": "string" },
         "price": { "type": "string" }
       },
-      "required": ["title", "description", "category", "imageUrl", "affiliateLink"]
+      "required": ["title", "description", "category", "affiliateLink"]
     },
     "Coupon": {
       "title": "Coupon",
