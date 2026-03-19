@@ -1,13 +1,49 @@
 import React, { useState } from 'react';
 import { useAppContext } from '../../context/AppContext';
 import { Coupon } from '../../types';
-import { Plus, Trash2, Save, Tag, Link as LinkIcon } from 'lucide-react';
+import { Plus, Trash2, Save, Tag, Link as LinkIcon, Sparkles, Loader2 } from 'lucide-react';
+import { suggestCouponDetails } from '../../services/gemini';
 
 export const ManageDeals: React.FC = () => {
   const { coupons, addCoupon, deleteCoupon } = useAppContext();
   const [isAdding, setIsAdding] = useState(false);
   const [formData, setFormData] = useState<Partial<Coupon>>({});
   const [dealToDelete, setDealToDelete] = useState<string | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+
+  const handleAiSuggest = async () => {
+    if (!formData.link) {
+      setAiError('Please enter an affiliate link first so I know which store to analyze.');
+      return;
+    }
+
+    setIsGenerating(true);
+    setAiError(null);
+    try {
+      // Extract store name from link if possible, or just use a generic prompt
+      let storeName = 'this store';
+      try {
+        const url = new URL(formData.link);
+        storeName = url.hostname.replace('www.', '').split('.')[0];
+      } catch (e) {
+        // Fallback to generic
+      }
+
+      const discountType = formData.code ? `using code ${formData.code}` : 'general discount';
+      const suggestion = await suggestCouponDetails(storeName, discountType);
+      
+      setFormData(prev => ({
+        ...prev,
+        title: suggestion.title,
+        description: suggestion.description
+      }));
+    } catch (err: any) {
+      setAiError(err.message || 'Failed to generate suggestions');
+    } finally {
+      setIsGenerating(false);
+    }
+  };
 
   const handleSave = () => {
     addCoupon(formData as Omit<Coupon, 'id'>);
@@ -25,7 +61,13 @@ export const ManageDeals: React.FC = () => {
   return (
     <div>
       <div className="flex justify-between items-center mb-8">
-        <h2 className="text-2xl font-bold text-stone-900">Manage Deals & Coupons</h2>
+        <div>
+          <h2 className="text-2xl font-bold text-stone-900">Manage Deals & Coupons</h2>
+          <p className="text-xs text-stone-500 mt-1 flex items-center gap-1">
+            <Sparkles className="h-3 w-3 text-emerald-500" />
+            Use AI to generate catchy titles and SEO descriptions for your deals
+          </p>
+        </div>
         {!isAdding && (
           <button
             onClick={() => setIsAdding(true)}
@@ -90,6 +132,25 @@ export const ManageDeals: React.FC = () => {
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                 placeholder="Details about the deal..."
               />
+            </div>
+            <div className="md:col-span-2">
+              <button
+                type="button"
+                onClick={handleAiSuggest}
+                disabled={isGenerating || !formData.link}
+                className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-emerald-50 text-emerald-700 rounded-xl border border-emerald-200 hover:bg-emerald-100 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isGenerating ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                ) : (
+                  <Sparkles className="h-5 w-5" />
+                )}
+                {isGenerating ? 'Generating Catchy Content...' : '✨ AI Suggest Title & Description'}
+              </button>
+              {!formData.link && (
+                <p className="mt-2 text-[10px] text-stone-400 text-center">Enter a link first to use AI suggestions</p>
+              )}
+              {aiError && <p className="mt-2 text-xs text-red-500 text-center">{aiError}</p>}
             </div>
           </div>
           <div className="mt-6 flex justify-end gap-3">

@@ -20,6 +20,7 @@ import { useAppContext } from './context/AppContext';
 
 function AppContent() {
   const { isAuthReady } = useAppContext();
+  console.log("AppContent rendering, isAuthReady:", isAuthReady);
 
   if (!isAuthReady) {
     return (

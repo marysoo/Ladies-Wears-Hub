@@ -38,12 +38,13 @@ export const ManageProducts: React.FC = () => {
         mimeType = parts[0].split(':')[1].split(';')[0];
         imageData = parts[1];
       } else {
-        if (!imageData.startsWith('data:')) {
-          throw new Error("AI suggestions require an uploaded image file. Please use the 'Add Image' button to upload a photo from your device.");
-        }
+        throw new Error("AI suggestions require an uploaded image file. Please use the 'Add Image' button to upload a photo from your device.");
       }
 
+      console.log("Requesting AI suggestion for product...");
       const suggestion = await suggestProductDetails(imageData, mimeType);
+      console.log("AI suggestion received:", suggestion);
+      
       setFormData(prev => ({
         ...prev,
         title: suggestion.title,
@@ -51,7 +52,8 @@ export const ManageProducts: React.FC = () => {
         category: suggestion.category
       }));
     } catch (err: any) {
-      setAiError(err.message || 'Failed to generate suggestions');
+      console.error("AI Suggestion Error:", err);
+      setAiError(err.message || 'Failed to generate suggestions. Please try again or check your internet connection.');
     } finally {
       setIsGenerating(false);
     }

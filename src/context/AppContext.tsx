@@ -81,6 +81,7 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
 }
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  console.log("AppProvider initializing");
   const [products, setProducts] = useState<Product[]>([]);
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [settings, setSettings] = useState<SiteSettings>(defaultSettings);
@@ -111,7 +112,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       setIsAuthReady(true);
     });
-    return () => unsubscribe();
+
+    // Fallback: If Firebase doesn't respond within 5 seconds, proceed anyway
+    const timeout = setTimeout(() => {
+      setIsAuthReady((ready) => {
+        if (!ready) {
+          console.warn("Firebase auth initialization timed out. Proceeding with unauthenticated state.");
+          return true;
+        }
+        return ready;
+      });
+    }, 5000);
+
+    return () => {
+      unsubscribe();
+      clearTimeout(timeout);
+    };
   }, []);
 
   useEffect(() => {

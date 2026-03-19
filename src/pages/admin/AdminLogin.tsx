@@ -6,7 +6,7 @@ import { Lock, LogIn } from 'lucide-react';
 export const AdminLogin: React.FC = () => {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const { login } = useAppContext();
+  const { login, loginWithRedirect } = useAppContext();
   const navigate = useNavigate();
 
   const handleLogin = async () => {
@@ -20,8 +20,24 @@ export const AdminLogin: React.FC = () => {
         setError('Unauthorized account. Only the admin can log in.');
       }
     } catch (err: any) {
-      setError(err.message || 'Failed to log in');
+      console.error("Login Error:", err);
+      if (err.code === 'auth/network-request-failed') {
+        setError('Network error. This often happens on mobile or if a popup is blocked. Please try the "Sign in with Redirect" option below.');
+      } else {
+        setError(err.message || 'Failed to log in');
+      }
     } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleRedirectLogin = async () => {
+    setIsLoading(true);
+    setError('');
+    try {
+      await loginWithRedirect();
+    } catch (err: any) {
+      setError(err.message || 'Failed to start redirect login');
       setIsLoading(false);
     }
   };
@@ -61,7 +77,26 @@ export const AdminLogin: React.FC = () => {
                   <LogIn className="h-5 w-5 text-emerald-500 group-hover:text-emerald-400" aria-hidden="true" />
                 )}
               </span>
-              Sign in with Google
+              Sign in with Google (Popup)
+            </button>
+          </div>
+
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center" aria-hidden="true">
+              <div className="w-full border-t border-stone-200"></div>
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="px-2 bg-white text-stone-500">Or if popup fails</span>
+            </div>
+          </div>
+
+          <div>
+            <button
+              onClick={handleRedirectLogin}
+              disabled={isLoading}
+              className="w-full flex justify-center py-3 px-4 border border-stone-300 text-sm font-medium rounded-2xl text-stone-700 bg-white hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 transition-colors disabled:opacity-70"
+            >
+              Sign in with Redirect
             </button>
           </div>
         </div>
